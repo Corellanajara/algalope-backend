@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  role         String   @default("USER")
+  createdAt    DateTime @default(now())
+
+  picks    Pick[]
+  scores   Score[]
+  payments Payment[]
+}
+
+model Racetrack {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  city     String
+  programs Program[]
+}
+
+model RaceWeek {
+  id         Int      @id @default(autoincrement())
+  year       Int
+  weekNumber Int
+  startDate  DateTime
+  endDate    DateTime
+
+  programs Program[]
+  payments Payment[]
+
+  @@unique([year, weekNumber])
+}
+
+model Program {
+  id          Int      @id @default(autoincrement())
+  racetrackId Int
+  weekId      Int
+  name        String
+  programDate DateTime
+  deadline    DateTime
+  status      String   @default("OPEN") // OPEN | CLOSED | SETTLED
+  createdAt   DateTime @default(now())
+
+  racetrack Racetrack @relation(fields: [racetrackId], references: [id])
+  week      RaceWeek  @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  races     Race[]
+}
+
+model Race {
+  id         Int    @id @default(autoincrement())
+  programId  Int
+  raceNumber Int
+  status     String @default("OPEN")
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  horses  Horse[]
+  picks   Pick[]
+  result  Result?
+  scores  Score[]
+
+  @@unique([programId, raceNumber])
+}
+
+model Horse {
+  id     Int    @id @default(autoincrement())
+  raceId Int
+  number Int
+  name   String
+  odds   Float?
+
+  race  Race   @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  picks Pick[]
+
+  @@unique([raceId, number])
+}
+
+model Pick {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  raceId    Int
+  horseId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race  Race  @relation(fields: [raceId], references: [id], onDelete: Cascade)
+  horse Horse @relation(fields: [horseId], references: [id])
+
+  @@unique([userId, raceId])
+}
+
+model Result {
+  id             Int      @id @default(autoincrement())
+  raceId         Int      @unique
+  firstHorseId   Int
+  secondHorseId  Int
+  thirdHorseId   Int
+  winnerDividend Float    @default(0)
+  settledAt      DateTime @default(now())
+
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+}
+
+model Score {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  raceId    Int
+  points    Int
+  breakdown String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  race Race @relation(fields: [raceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, raceId])
+}
+
+model Payment {
+  id     Int      @id @default(autoincrement())
+  userId Int
+  weekId Int
+  paid   Boolean  @default(false)
+  paidAt DateTime?
+  note   String?
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week RaceWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekId])
+}
