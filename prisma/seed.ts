@@ -31,17 +31,30 @@ async function main() {
     await prisma.racetrack.upsert({ where: { name: t.name }, update: {}, create: t });
   }
 
-  const passwordHash = await bcrypt.hash('admin123', 10);
-  await prisma.user.upsert({
-    where: { email: 'admin@algalope.cl' },
-    update: {},
-    create: {
-      email: 'admin@algalope.cl',
-      passwordHash,
-      displayName: 'Administrador',
-      role: 'ADMIN',
-    },
-  });
+  const quickAccounts = [
+    { email: 'demo@algalope.cl', password: 'demo123', displayName: 'Demo', role: 'USER' },
+    { email: 'admin@algalope.cl', password: 'admin123', displayName: 'Administrador', role: 'ADMIN' },
+    { email: 'rival@algalope.cl', password: 'rival123', displayName: 'Rival', role: 'USER' },
+    { email: 'jorge@algalope.cl', password: 'jorge123', displayName: 'Jorge', role: 'USER' },
+    { email: 'maria@algalope.cl', password: 'maria123', displayName: 'María', role: 'USER' },
+    { email: 'pedro@algalope.cl', password: 'pedro123', displayName: 'Pedro', role: 'USER' },
+    { email: 'ana@algalope.cl', password: 'ana123', displayName: 'Ana', role: 'USER' },
+    { email: 'luis@algalope.cl', password: 'luis123', displayName: 'Luis', role: 'USER' },
+  ];
+
+  for (const a of quickAccounts) {
+    const passwordHash = await bcrypt.hash(a.password, 10);
+    await prisma.user.upsert({
+      where: { email: a.email },
+      update: { displayName: a.displayName, role: a.role, passwordHash },
+      create: {
+        email: a.email,
+        passwordHash,
+        displayName: a.displayName,
+        role: a.role,
+      },
+    });
+  }
 
   const now = new Date();
   const { year, week } = getISOWeek(now);
@@ -120,7 +133,10 @@ async function main() {
   }
 
   console.log('✅ Seed completo.');
-  console.log('   Admin: admin@algalope.cl / admin123');
+  console.log('   Cuentas de acceso rápido:');
+  for (const a of quickAccounts) {
+    console.log(`   • ${a.displayName.padEnd(14)} ${a.email} / ${a.password}`);
+  }
 }
 
 main()
