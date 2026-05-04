@@ -101,16 +101,19 @@ router.post('/weeks', requireAuth, requireAdmin, async (req, res, next) => {
 });
 
 // Admin: create program + races + horses in one shot (stepper wizard)
+// Deadline is derived server-side as programDate - 1h.
+// Races accept either a horseCount (auto-generates "Caballo 1..N") or a
+// legacy `horses` array (kept for backwards compat with old clients/seeds).
 const createProgramSchema = z.object({
   racetrackId: z.number().int(),
   weekId: z.number().int().optional(),
   name: z.string().min(1).max(120),
   programDate: z.string(),
-  deadline: z.string(),
   races: z
     .array(
       z.object({
         raceNumber: z.number().int().min(1),
+        horseCount: z.number().int().min(2).max(30).optional(),
         horses: z
           .array(
             z.object({
@@ -119,11 +122,18 @@ const createProgramSchema = z.object({
               odds: z.number().positive().optional().nullable(),
             }),
           )
-          .min(2),
+          .min(2)
+          .optional(),
       }),
     )
-    .min(1),
+    .min(1)
+    .refine(
+      (rs) => rs.every((r) => r.horseCount != null || (r.horses && r.horses.length >= 2)),
+      'Cada carrera debe tener horseCount o un arreglo de horses',
+    ),
 });
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 function getISOWeek(d: Date): { year: number; week: number } {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -152,6 +162,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const data = createProgramSchema.parse(req.body);
     const programDate = new Date(data.programDate);
+    const deadline = new Date(programDate.getTime() - ONE_HOUR_MS);
     const weekId = data.weekId ?? (await resolveWeekId(programDate));
     const program = await prisma.$transaction(async (tx) => {
       const p = await tx.program.create({
@@ -160,21 +171,28 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
           weekId,
           name: data.name,
           programDate,
-          deadline: new Date(data.deadline),
+          deadline,
         },
       });
       for (const r of data.races) {
         const race = await tx.race.create({
           data: { programId: p.id, raceNumber: r.raceNumber },
         });
-        await tx.horse.createMany({
-          data: r.horses.map((h) => ({
-            raceId: race.id,
-            number: h.number,
-            name: h.name && h.name.trim() ? h.name.trim() : `Caballo ${h.number}`,
-            odds: h.odds ?? null,
-          })),
-        });
+        const horses =
+          r.horses && r.horses.length > 0
+            ? r.horses.map((h) => ({
+                raceId: race.id,
+                number: h.number,
+                name: h.name && h.name.trim() ? h.name.trim() : `Caballo ${h.number}`,
+                odds: h.odds ?? null,
+              }))
+            : Array.from({ length: r.horseCount! }, (_, i) => ({
+                raceId: race.id,
+                number: i + 1,
+                name: `Caballo ${i + 1}`,
+                odds: null as number | null,
+              }));
+        await tx.horse.createMany({ data: horses });
       }
       return p;
     });
@@ -202,11 +220,11 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   }
 });
 
-// Admin: update deadline / name
+// Admin: update name/date/status. Deadline is always derived from programDate
+// (programDate - 1h) and cannot be set independently.
 const updateProgramSchema = z.object({
   name: z.string().optional(),
   programDate: z.string().optional(),
-  deadline: z.string().optional(),
   status: z.enum(['OPEN', 'CLOSED', 'SETTLED']).optional(),
 });
 
@@ -215,8 +233,11 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res, next) => {
     const data = updateProgramSchema.parse(req.body);
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.programDate) updateData.programDate = new Date(data.programDate);
-    if (data.deadline) updateData.deadline = new Date(data.deadline);
+    if (data.programDate) {
+      const pd = new Date(data.programDate);
+      updateData.programDate = pd;
+      updateData.deadline = new Date(pd.getTime() - ONE_HOUR_MS);
+    }
     if (data.status) updateData.status = data.status;
     const p = await prisma.program.update({
       where: { id: Number(req.params.id) },
@@ -243,7 +264,7 @@ router.get('/:id/picks', requireAuth, async (req, res, next) => {
       where: { raceId: { in: raceIds } },
       include: {
         horse: true,
-        user: { select: { id: true, displayName: true, email: true } },
+        user: { select: { id: true, displayName: true, pseudonym: true, email: true } },
       },
       orderBy: [{ userId: 'asc' }, { raceId: 'asc' }],
     });

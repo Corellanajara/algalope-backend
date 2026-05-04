@@ -12,6 +12,7 @@ model User {
   email        String   @unique
   passwordHash String
   displayName  String
+  pseudonym    String?
   role         String   @default("USER")
   createdAt    DateTime @default(now())
 

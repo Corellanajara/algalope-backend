@@ -10,6 +10,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   displayName: z.string().min(2).max(50),
+  pseudonym: z.string().min(2).max(50).optional(),
 });
 
 router.post('/register', async (req, res, next) => {
@@ -25,6 +26,7 @@ router.post('/register', async (req, res, next) => {
         email: data.email,
         passwordHash,
         displayName: data.displayName,
+        pseudonym: data.pseudonym?.trim() || null,
         role: userCount === 0 ? 'ADMIN' : 'USER',
       },
     });
@@ -36,7 +38,13 @@ router.post('/register', async (req, res, next) => {
     });
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, role: user.role, displayName: user.displayName },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        displayName: user.displayName,
+        pseudonym: user.pseudonym,
+      },
     });
   } catch (e) {
     next(e);
@@ -63,15 +71,30 @@ router.post('/login', async (req, res, next) => {
     });
     res.json({
       token,
-      user: { id: user.id, email: user.email, role: user.role, displayName: user.displayName },
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        displayName: user.displayName,
+        pseudonym: user.pseudonym,
+      },
     });
   } catch (e) {
     next(e);
   }
 });
 
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
+router.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const u = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: { id: true, email: true, role: true, displayName: true, pseudonym: true },
+    });
+    if (!u) return res.status(404).json({ error: 'Usuario no existe' });
+    res.json({ user: u });
+  } catch (e) {
+    next(e);
+  }
 });
 
 export default router;

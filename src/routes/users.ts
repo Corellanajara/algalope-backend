@@ -9,7 +9,7 @@ const router = Router();
 router.get('/', requireAuth, requireAdmin, async (_req, res, next) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true },
+      select: { id: true, email: true, displayName: true, pseudonym: true, role: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
     res.json(users);
@@ -22,6 +22,7 @@ const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   displayName: z.string().min(2).max(50),
+  pseudonym: z.string().min(2).max(50).optional(),
   role: z.enum(['USER', 'ADMIN']).optional(),
 });
 
@@ -36,9 +37,10 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
         email: data.email,
         passwordHash,
         displayName: data.displayName,
+        pseudonym: data.pseudonym?.trim() || null,
         role: data.role ?? 'USER',
       },
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true },
+      select: { id: true, email: true, displayName: true, pseudonym: true, role: true, createdAt: true },
     });
     res.status(201).json(user);
   } catch (e) {
@@ -47,16 +49,23 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
 });
 
 const updateMeSchema = z.object({
-  displayName: z.string().min(2).max(50),
+  displayName: z.string().min(2).max(50).optional(),
+  pseudonym: z.string().max(50).nullable().optional(),
 });
 
 router.patch('/me', requireAuth, async (req, res, next) => {
   try {
     const data = updateMeSchema.parse(req.body);
+    const updateData: any = {};
+    if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    if (data.pseudonym !== undefined) {
+      const trimmed = data.pseudonym?.trim();
+      updateData.pseudonym = trimmed ? trimmed : null;
+    }
     const user = await prisma.user.update({
       where: { id: req.user!.id },
-      data: { displayName: data.displayName },
-      select: { id: true, email: true, displayName: true, role: true },
+      data: updateData,
+      select: { id: true, email: true, displayName: true, pseudonym: true, role: true },
     });
     res.json(user);
   } catch (e) {
@@ -66,6 +75,7 @@ router.patch('/me', requireAuth, async (req, res, next) => {
 
 const updateUserSchema = z.object({
   displayName: z.string().min(2).max(50).optional(),
+  pseudonym: z.string().max(50).nullable().optional(),
   role: z.enum(['USER', 'ADMIN']).optional(),
   password: z.string().min(6).optional(),
 });
@@ -77,6 +87,10 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res, next) => {
     const data = updateUserSchema.parse(req.body);
     const updateData: any = {};
     if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    if (data.pseudonym !== undefined) {
+      const trimmed = data.pseudonym?.trim();
+      updateData.pseudonym = trimmed ? trimmed : null;
+    }
     if (data.role !== undefined) updateData.role = data.role;
     if (data.password !== undefined) updateData.passwordHash = await bcrypt.hash(data.password, 10);
 
@@ -87,7 +101,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res, next) => {
     const user = await prisma.user.update({
       where: { id },
       data: updateData,
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true },
+      select: { id: true, email: true, displayName: true, pseudonym: true, role: true, createdAt: true },
     });
     res.json(user);
   } catch (e) {
