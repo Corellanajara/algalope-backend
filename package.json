@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "prisma db push --accept-data-loss && tsx prisma/seed.ts && node dist/index.js",
+    "start": "tsx prisma/pre-push.ts && prisma db push --accept-data-loss && tsx prisma/seed.ts && node dist/index.js",
     "postinstall": "prisma generate",
     "db:setup": "prisma migrate dev --name init && tsx prisma/seed.ts",
     "seed": "tsx prisma/seed.ts",
