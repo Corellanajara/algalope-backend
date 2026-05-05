@@ -7,11 +7,12 @@ import morgan from 'morgan';
 import authRoutes from './routes/auth';
 import racetrackRoutes from './routes/racetracks';
 import raceRoutes from './routes/races';
-import programRoutes from './routes/programs';
+import reunionRoutes from './routes/reuniones';
 import pickRoutes from './routes/picks';
 import resultRoutes from './routes/results';
 import userRoutes from './routes/users';
 import leaderboardRoutes from './routes/leaderboard';
+import programaRoutes from './routes/programas';
 import { errorHandler } from './middleware/error';
 
 const app = express();
@@ -26,11 +27,12 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/racetracks', racetrackRoutes);
 app.use('/api/races', raceRoutes);
-app.use('/api/programs', programRoutes);
+app.use('/api/reuniones', reunionRoutes);
 app.use('/api/picks', pickRoutes);
 app.use('/api/results', resultRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/programas', programaRoutes);
 
 app.use(errorHandler);
 

@@ -5,7 +5,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/programs?weekId=&current=1&racetrackId=
+// GET /api/reuniones?weekId=&current=1&racetrackId=
 router.get('/', async (req, res, next) => {
   try {
     const weekId = req.query.weekId ? Number(req.query.weekId) : undefined;
@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
     }
     if (racetrackId) where.racetrackId = racetrackId;
 
-    const programs = await prisma.program.findMany({
+    const reuniones = await prisma.reunion.findMany({
       where,
       include: {
         racetrack: true,
@@ -36,9 +36,9 @@ router.get('/', async (req, res, next) => {
           orderBy: { raceNumber: 'asc' },
         },
       },
-      orderBy: [{ programDate: 'asc' }],
+      orderBy: [{ reunionDate: 'asc' }],
     });
-    res.json(programs);
+    res.json(reuniones);
   } catch (e) {
     next(e);
   }
@@ -57,7 +57,7 @@ router.get('/weeks', async (_req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const program = await prisma.program.findUnique({
+    const reunion = await prisma.reunion.findUnique({
       where: { id: Number(req.params.id) },
       include: {
         racetrack: true,
@@ -68,14 +68,14 @@ router.get('/:id', async (req, res, next) => {
         },
       },
     });
-    if (!program) return res.status(404).json({ error: 'Programa no existe' });
-    res.json(program);
+    if (!reunion) return res.status(404).json({ error: 'Reunión no existe' });
+    res.json(reunion);
   } catch (e) {
     next(e);
   }
 });
 
-// Admin: create week (kept here for admin convenience)
+// Admin: create week
 const weekSchema = z.object({
   year: z.number().int(),
   weekNumber: z.number().int().min(1).max(53),
@@ -100,15 +100,13 @@ router.post('/weeks', requireAuth, requireAdmin, async (req, res, next) => {
   }
 });
 
-// Admin: create program + races + horses in one shot (stepper wizard)
-// Deadline is derived server-side as programDate - 1h.
-// Races accept either a horseCount (auto-generates "Caballo 1..N") or a
-// legacy `horses` array (kept for backwards compat with old clients/seeds).
-const createProgramSchema = z.object({
+// Admin: create reunion + races + horses in one shot
+const createReunionSchema = z.object({
   racetrackId: z.number().int(),
   weekId: z.number().int().optional(),
   name: z.string().min(1).max(120),
-  programDate: z.string(),
+  reunionDate: z.string(),
+  deadline: z.string().optional(),
   races: z
     .array(
       z.object({
@@ -144,9 +142,9 @@ function getISOWeek(d: Date): { year: number; week: number } {
   return { year: date.getUTCFullYear(), week };
 }
 
-async function resolveWeekId(programDate: Date): Promise<number> {
-  const { year, week } = getISOWeek(programDate);
-  const startDate = new Date(programDate);
+async function resolveWeekId(reunionDate: Date): Promise<number> {
+  const { year, week } = getISOWeek(reunionDate);
+  const startDate = new Date(reunionDate);
   startDate.setHours(0, 0, 0, 0);
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 7);
@@ -160,23 +158,25 @@ async function resolveWeekId(programDate: Date): Promise<number> {
 
 router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const data = createProgramSchema.parse(req.body);
-    const programDate = new Date(data.programDate);
-    const deadline = new Date(programDate.getTime() - ONE_HOUR_MS);
-    const weekId = data.weekId ?? (await resolveWeekId(programDate));
-    const program = await prisma.$transaction(async (tx) => {
-      const p = await tx.program.create({
+    const data = createReunionSchema.parse(req.body);
+    const reunionDate = new Date(data.reunionDate);
+    const deadline = data.deadline
+      ? new Date(data.deadline)
+      : new Date(reunionDate.getTime() - ONE_HOUR_MS);
+    const weekId = data.weekId ?? (await resolveWeekId(reunionDate));
+    const reunion = await prisma.$transaction(async (tx) => {
+      const r0 = await tx.reunion.create({
         data: {
           racetrackId: data.racetrackId,
           weekId,
           name: data.name,
-          programDate,
+          reunionDate,
           deadline,
         },
       });
       for (const r of data.races) {
         const race = await tx.race.create({
-          data: { programId: p.id, raceNumber: r.raceNumber },
+          data: { reunionId: r0.id, raceNumber: r.raceNumber },
         });
         const horses =
           r.horses && r.horses.length > 0
@@ -194,11 +194,11 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
               }));
         await tx.horse.createMany({ data: horses });
       }
-      return p;
+      return r0;
     });
 
-    const full = await prisma.program.findUnique({
-      where: { id: program.id },
+    const full = await prisma.reunion.findUnique({
+      where: { id: reunion.id },
       include: {
         racetrack: true,
         week: true,
@@ -213,53 +213,54 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
 
 router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    await prisma.program.delete({ where: { id: Number(req.params.id) } });
+    await prisma.reunion.delete({ where: { id: Number(req.params.id) } });
     res.status(204).end();
   } catch (e) {
     next(e);
   }
 });
 
-// Admin: update name/date/status. Deadline is always derived from programDate
-// (programDate - 1h) and cannot be set independently.
-const updateProgramSchema = z.object({
+const updateReunionSchema = z.object({
   name: z.string().optional(),
-  programDate: z.string().optional(),
+  reunionDate: z.string().optional(),
+  deadline: z.string().optional(),
   status: z.enum(['OPEN', 'CLOSED', 'SETTLED']).optional(),
 });
 
 router.put('/:id', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const data = updateProgramSchema.parse(req.body);
+    const data = updateReunionSchema.parse(req.body);
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
-    if (data.programDate) {
-      const pd = new Date(data.programDate);
-      updateData.programDate = pd;
-      updateData.deadline = new Date(pd.getTime() - ONE_HOUR_MS);
+    if (data.reunionDate) {
+      const pd = new Date(data.reunionDate);
+      updateData.reunionDate = pd;
+      // If deadline not explicitly provided, derive from reunionDate.
+      if (!data.deadline) updateData.deadline = new Date(pd.getTime() - ONE_HOUR_MS);
     }
+    if (data.deadline) updateData.deadline = new Date(data.deadline);
     if (data.status) updateData.status = data.status;
-    const p = await prisma.program.update({
+    const r = await prisma.reunion.update({
       where: { id: Number(req.params.id) },
       data: updateData,
     });
-    res.json(p);
+    res.json(r);
   } catch (e) {
     next(e);
   }
 });
 
-// GET /api/programs/:id/picks — public visibility of all users' cartillas for transparency
+// GET /api/reuniones/:id/picks — public visibility
 router.get('/:id/picks', requireAuth, async (req, res, next) => {
   try {
-    const programId = Number(req.params.id);
-    const program = await prisma.program.findUnique({
-      where: { id: programId },
+    const reunionId = Number(req.params.id);
+    const reunion = await prisma.reunion.findUnique({
+      where: { id: reunionId },
       include: { races: true },
     });
-    if (!program) return res.status(404).json({ error: 'Programa no existe' });
+    if (!reunion) return res.status(404).json({ error: 'Reunión no existe' });
 
-    const raceIds = program.races.map((r) => r.id);
+    const raceIds = reunion.races.map((r) => r.id);
     const picks = await prisma.pick.findMany({
       where: { raceId: { in: raceIds } },
       include: {
@@ -269,7 +270,6 @@ router.get('/:id/picks', requireAuth, async (req, res, next) => {
       orderBy: [{ userId: 'asc' }, { raceId: 'asc' }],
     });
 
-    // Group by user
     const byUser = new Map<number, any>();
     for (const p of picks) {
       const entry = byUser.get(p.userId) ?? {
@@ -289,7 +289,7 @@ router.get('/:id/picks', requireAuth, async (req, res, next) => {
   }
 });
 
-// Submit cartilla (batch picks) for a program
+// Submit cartilla (batch picks) for a reunion
 const batchPickSchema = z.object({
   picks: z
     .array(
@@ -303,30 +303,29 @@ const batchPickSchema = z.object({
 
 router.post('/:id/picks', requireAuth, async (req, res, next) => {
   try {
-    const programId = Number(req.params.id);
+    const reunionId = Number(req.params.id);
     const { picks } = batchPickSchema.parse(req.body);
 
-    const program = await prisma.program.findUnique({
-      where: { id: programId },
+    const reunion = await prisma.reunion.findUnique({
+      where: { id: reunionId },
       include: {
         races: { include: { horses: true } },
       },
     });
-    if (!program) return res.status(404).json({ error: 'Programa no existe' });
-    if (new Date() > program.deadline) {
-      return res.status(403).json({ error: 'Deadline del programa expirado' });
+    if (!reunion) return res.status(404).json({ error: 'Reunión no existe' });
+    if (new Date() > reunion.deadline) {
+      return res.status(403).json({ error: 'Deadline de la reunión expirado' });
     }
-    if (program.status !== 'OPEN') {
-      return res.status(403).json({ error: 'Programa cerrado' });
+    if (reunion.status !== 'OPEN') {
+      return res.status(403).json({ error: 'Reunión cerrada' });
     }
 
-    // Validate: one pick per race, all races covered, horse belongs to race
-    const racesById = new Map(program.races.map((r: any) => [r.id, r]));
+    const racesById = new Map(reunion.races.map((r: any) => [r.id, r]));
     const racesSeen = new Set<number>();
     for (const p of picks) {
       const race = racesById.get(p.raceId);
       if (!race) {
-        return res.status(400).json({ error: `Carrera ${p.raceId} no pertenece al programa` });
+        return res.status(400).json({ error: `Carrera ${p.raceId} no pertenece a la reunión` });
       }
       if (racesSeen.has(p.raceId)) {
         return res.status(400).json({ error: 'Picks duplicados en la misma carrera' });
@@ -338,10 +337,10 @@ router.post('/:id/picks', requireAuth, async (req, res, next) => {
           .json({ error: `Caballo ${p.horseId} no pertenece a la carrera ${p.raceId}` });
       }
     }
-    if (racesSeen.size !== program.races.length) {
+    if (racesSeen.size !== reunion.races.length) {
       return res
         .status(400)
-        .json({ error: 'Debes elegir un caballo por cada carrera del programa' });
+        .json({ error: 'Debes elegir un caballo por cada carrera de la reunión' });
     }
 
     const userId = req.user!.id;

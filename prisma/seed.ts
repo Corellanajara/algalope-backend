@@ -65,18 +65,18 @@ async function main() {
   });
 
   const allTracks = await prisma.racetrack.findMany();
-  const existing = await prisma.program.count({ where: { weekId: raceWeek.id } });
+  const existing = await prisma.reunion.count({ where: { weekId: raceWeek.id } });
 
   if (existing === 0) {
-    // Programa 1: Club Hípico de Santiago — 3 carreras
-    const prog1Date = addDays(now, 2);
-    const prog1 = await prisma.program.create({
+    // Reunión 1: Club Hípico de Santiago — 3 carreras
+    const r1Date = addDays(now, 2);
+    const r1 = await prisma.reunion.create({
       data: {
         racetrackId: allTracks.find((t) => t.name === 'Club Hípico de Santiago')!.id,
         weekId: raceWeek.id,
         name: 'Reunión Sábado',
-        programDate: prog1Date,
-        deadline: new Date(prog1Date.getTime() - 60 * 60 * 1000),
+        reunionDate: r1Date,
+        deadline: new Date(r1Date.getTime() - 60 * 60 * 1000),
       },
     });
     const p1 = [
@@ -86,7 +86,7 @@ async function main() {
     ];
     for (let i = 0; i < p1.length; i++) {
       const race = await prisma.race.create({
-        data: { programId: prog1.id, raceNumber: i + 1 },
+        data: { reunionId: r1.id, raceNumber: i + 1 },
       });
       await prisma.horse.createMany({
         data: p1[i].map((name, idx) => ({
@@ -98,15 +98,15 @@ async function main() {
       });
     }
 
-    // Programa 2: Hipódromo Chile — 2 carreras
-    const prog2Date = addDays(now, 4);
-    const prog2 = await prisma.program.create({
+    // Reunión 2: Hipódromo Chile — 2 carreras
+    const r2Date = addDays(now, 4);
+    const r2 = await prisma.reunion.create({
       data: {
         racetrackId: allTracks.find((t) => t.name === 'Hipódromo Chile')!.id,
         weekId: raceWeek.id,
         name: 'Reunión Lunes',
-        programDate: prog2Date,
-        deadline: new Date(prog2Date.getTime() - 60 * 60 * 1000),
+        reunionDate: r2Date,
+        deadline: new Date(r2Date.getTime() - 60 * 60 * 1000),
       },
     });
     const p2 = [
@@ -115,7 +115,7 @@ async function main() {
     ];
     for (let i = 0; i < p2.length; i++) {
       const race = await prisma.race.create({
-        data: { programId: prog2.id, raceNumber: i + 1 },
+        data: { reunionId: r2.id, raceNumber: i + 1 },
       });
       await prisma.horse.createMany({
         data: p2[i].map((name, idx) => ({
@@ -127,9 +127,9 @@ async function main() {
       });
     }
 
-    console.log(`   ✔ 2 programas / 5 carreras creadas (semana ${week}/${year}).`);
+    console.log(`   ✔ 2 reuniones / 5 carreras creadas (semana ${week}/${year}).`);
   } else {
-    console.log(`   • Semana ${week}/${year} ya tiene programas, no inserto demos.`);
+    console.log(`   • Semana ${week}/${year} ya tiene reuniones, no inserto demos.`);
   }
 
   console.log('✅ Seed completo.');

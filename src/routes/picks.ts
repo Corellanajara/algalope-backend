@@ -13,7 +13,7 @@ router.get('/me', requireAuth, async (req, res, next) => {
         horse: true,
         race: {
           include: {
-            program: { include: { racetrack: true, week: true } },
+            reunion: { include: { racetrack: true, week: true } },
             result: true,
           },
         },

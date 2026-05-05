@@ -40,18 +40,18 @@ async function main() {
     extraUsers.push(created);
   }
 
-  const programs = await prisma.program.findMany({
+  const reuniones = await prisma.reunion.findMany({
     include: { races: { include: { horses: { orderBy: { number: 'asc' } } } } },
-    orderBy: { programDate: 'asc' },
+    orderBy: { reunionDate: 'asc' },
   });
-  if (programs.length === 0) {
-    console.log('   • No hay programas. Corre `npm run seed` primero.');
+  if (reuniones.length === 0) {
+    console.log('   • No hay reuniones. Corre `npm run seed` primero.');
     return;
   }
 
   // Demo picks horse #1 in every race; Rival picks #2
-  for (const prog of programs) {
-    for (const race of prog.races) {
+  for (const reunion of reuniones) {
+    for (const race of reunion.races) {
       if (race.horses.length === 0) continue;
       await prisma.pick.upsert({
         where: { userId_raceId: { userId: demo.id, raceId: race.id } },
@@ -77,10 +77,10 @@ async function main() {
       }
     }
   }
-  console.log(`   ✔ Picks creados para Demo y Rival en ${programs.length} programas.`);
+  console.log(`   ✔ Picks creados para Demo y Rival en ${reuniones.length} reuniones.`);
 
-  // Settle first race of first program so Demo has some points
-  const firstRace = programs[0]?.races[0];
+  // Settle first race of first reunion so Demo has some points
+  const firstRace = reuniones[0]?.races[0];
   if (firstRace && firstRace.horses.length >= 3) {
     const [h1, h2, h3] = firstRace.horses;
     await settleRace(firstRace.id, {

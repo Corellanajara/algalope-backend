@@ -133,7 +133,7 @@ router.get('/me/history', requireAuth, async (req, res, next) => {
           include: {
             horses: true,
             result: true,
-            program: { include: { racetrack: true, week: true } },
+            reunion: { include: { racetrack: true, week: true } },
           },
         },
       },

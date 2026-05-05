@@ -3,17 +3,17 @@ import { prisma } from '../db';
 
 const router = Router();
 
-// GET /api/leaderboard?weekId=&programId=  (omit both for overall)
-// programId takes precedence over weekId.
+// GET /api/leaderboard?weekId=&reunionId=  (omit both for overall)
+// reunionId takes precedence over weekId.
 router.get('/', async (req, res, next) => {
   try {
     const weekId = req.query.weekId ? Number(req.query.weekId) : undefined;
-    const programId = req.query.programId ? Number(req.query.programId) : undefined;
+    const reunionId = req.query.reunionId ? Number(req.query.reunionId) : undefined;
 
-    const where = programId
-      ? { race: { programId } }
+    const where: any = reunionId
+      ? { race: { reunionId } }
       : weekId
-      ? { race: { program: { weekId } } }
+      ? { race: { reunion: { weekId } } }
       : {};
 
     const scores = await prisma.score.findMany({

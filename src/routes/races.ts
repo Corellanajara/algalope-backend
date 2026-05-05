@@ -10,7 +10,7 @@ router.get('/:id', async (req, res, next) => {
       where: { id: Number(req.params.id) },
       include: {
         horses: { orderBy: { number: 'asc' } },
-        program: { include: { racetrack: true } },
+        reunion: { include: { racetrack: true } },
         result: true,
       },
     });

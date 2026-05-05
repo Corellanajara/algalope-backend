@@ -16,15 +16,16 @@ model User {
   role         String   @default("USER")
   createdAt    DateTime @default(now())
 
-  picks    Pick[]
-  scores   Score[]
+  picks     Pick[]
+  scores    Score[]
+  programas Programa[]
 }
 
 model Racetrack {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  city     String
-  programs Program[]
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  city      String
+  reuniones Reunion[]
 }
 
 model RaceWeek {
@@ -34,17 +35,18 @@ model RaceWeek {
   startDate  DateTime
   endDate    DateTime
 
-  programs Program[]
+  reuniones Reunion[]
+  programas Programa[]
 
   @@unique([year, weekNumber])
 }
 
-model Program {
+model Reunion {
   id          Int      @id @default(autoincrement())
   racetrackId Int
   weekId      Int
   name        String
-  programDate DateTime
+  reunionDate DateTime
   deadline    DateTime
   status      String   @default("OPEN") // OPEN | CLOSED | SETTLED
   createdAt   DateTime @default(now())
@@ -56,17 +58,17 @@ model Program {
 
 model Race {
   id         Int    @id @default(autoincrement())
-  programId  Int
+  reunionId  Int
   raceNumber Int
   status     String @default("OPEN")
 
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  reunion Reunion @relation(fields: [reunionId], references: [id], onDelete: Cascade)
   horses  Horse[]
   picks   Pick[]
   result  Result?
   scores  Score[]
 
-  @@unique([programId, raceNumber])
+  @@unique([reunionId, raceNumber])
 }
 
 model Horse {
@@ -122,3 +124,16 @@ model Score {
   @@unique([userId, raceId])
 }
 
+model Programa {
+  id     Int       @id @default(autoincrement())
+  userId Int
+  weekId Int
+  paid   Boolean   @default(false)
+  paidAt DateTime?
+  note   String?
+
+  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  week RaceWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekId])
+}
