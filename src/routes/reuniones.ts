@@ -38,7 +38,32 @@ router.get('/', async (req, res, next) => {
       },
       orderBy: [{ reunionDate: 'asc' }],
     });
-    res.json(reuniones);
+
+    // Count distinct users who submitted at least one pick per reunion. A
+    // "cartilla enviada" is a user who has picks in any race of the reunion —
+    // matches what the public cartillas view shows.
+    const allRaceIds = reuniones.flatMap((r) => r.races.map((rc) => rc.id));
+    const cartillasByReunion = new Map<number, number>();
+    if (allRaceIds.length > 0) {
+      const picks = await prisma.pick.findMany({
+        where: { raceId: { in: allRaceIds } },
+        select: { raceId: true, userId: true },
+      });
+      const raceToReunion = new Map<number, number>();
+      for (const r of reuniones) for (const rc of r.races) raceToReunion.set(rc.id, r.id);
+      const usersByReunion = new Map<number, Set<number>>();
+      for (const p of picks) {
+        const rid = raceToReunion.get(p.raceId)!;
+        const set = usersByReunion.get(rid) ?? new Set<number>();
+        set.add(p.userId);
+        usersByReunion.set(rid, set);
+      }
+      for (const [rid, set] of usersByReunion) cartillasByReunion.set(rid, set.size);
+    }
+
+    res.json(
+      reuniones.map((r) => ({ ...r, cartillasCount: cartillasByReunion.get(r.id) ?? 0 })),
+    );
   } catch (e) {
     next(e);
   }
