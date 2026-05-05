@@ -18,7 +18,6 @@ model User {
 
   picks    Pick[]
   scores   Score[]
-  payments Payment[]
 }
 
 model Racetrack {
@@ -36,7 +35,6 @@ model RaceWeek {
   endDate    DateTime
 
   programs Program[]
-  payments Payment[]
 
   @@unique([year, weekNumber])
 }
@@ -124,16 +122,3 @@ model Score {
   @@unique([userId, raceId])
 }
 
-model Payment {
-  id     Int      @id @default(autoincrement())
-  userId Int
-  weekId Int
-  paid   Boolean  @default(false)
-  paidAt DateTime?
-  note   String?
-
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  week RaceWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, weekId])
-}

@@ -10,7 +10,6 @@ import raceRoutes from './routes/races';
 import programRoutes from './routes/programs';
 import pickRoutes from './routes/picks';
 import resultRoutes from './routes/results';
-import paymentRoutes from './routes/payments';
 import userRoutes from './routes/users';
 import leaderboardRoutes from './routes/leaderboard';
 import { errorHandler } from './middleware/error';
@@ -30,7 +29,6 @@ app.use('/api/races', raceRoutes);
 app.use('/api/programs', programRoutes);
 app.use('/api/picks', pickRoutes);
 app.use('/api/results', resultRoutes);
-app.use('/api/payments', paymentRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 
