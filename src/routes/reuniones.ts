@@ -139,6 +139,7 @@ const createReunionSchema = z.object({
       z.object({
         raceNumber: z.number().int().min(1),
         horseCount: z.number().int().min(2).max(30).optional(),
+        favoriteNumber: z.number().int().min(1).optional().nullable(),
         horses: z
           .array(
             z.object({
@@ -205,6 +206,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
         const race = await tx.race.create({
           data: { reunionId: r0.id, raceNumber: r.raceNumber },
         });
+        const fav = r.favoriteNumber ?? null;
         const horses =
           r.horses && r.horses.length > 0
             ? r.horses.map((h) => ({
@@ -212,12 +214,14 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
                 number: h.number,
                 name: h.name && h.name.trim() ? h.name.trim() : `Caballo ${h.number}`,
                 odds: h.odds ?? null,
+                isFavorite: fav != null && h.number === fav,
               }))
             : Array.from({ length: r.horseCount! }, (_, i) => ({
                 raceId: race.id,
                 number: i + 1,
                 name: `Caballo ${i + 1}`,
                 odds: null as number | null,
+                isFavorite: fav != null && i + 1 === fav,
               }));
         await tx.horse.createMany({ data: horses });
       }
