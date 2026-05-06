@@ -62,6 +62,18 @@ async function main() {
     await exec('ALTER TABLE "Race" RENAME COLUMN "programId" TO "reunionId"');
   }
 
+  // 5) Programa: weekId → reunionId. The mapping from a (user, week) payment
+  //    to a single reunion of that week is ambiguous, so we drop the table and
+  //    let `db push` recreate it. Existing payment rows are lost — same outcome
+  //    as the migration.sql, but compatible with the db-push deploy flow.
+  if (
+    (await tableExists('Programa')) &&
+    (await columnExists('Programa', 'weekId')) &&
+    !(await columnExists('Programa', 'reunionId'))
+  ) {
+    await exec('DROP TABLE IF EXISTS "Programa" CASCADE');
+  }
+
   console.log('✅ Pre-push completo.');
 }
 
