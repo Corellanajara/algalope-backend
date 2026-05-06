@@ -21,8 +21,19 @@ export async function settleRace(raceId: number, input: ResultInput) {
     }
   }
 
+  // Picks on a scratched horse are redirected to the race favorite for scoring.
+  const horsesById = new Map(race.horses.map((h) => [h.id, h]));
+  const favorite = race.horses.find((h) => h.isFavorite && !h.isScratched);
+  function effectiveHorseId(pickHorseId: number): number {
+    const h = horsesById.get(pickHorseId);
+    if (h?.isScratched && favorite) return favorite.id;
+    return pickHorseId;
+  }
+
   // Count winners (for "único" bonus: only 1 pick on winning horse across all users)
-  const winnerPickCount = race.picks.filter((p) => p.horseId === input.firstHorseId).length;
+  const winnerPickCount = race.picks.filter(
+    (p) => effectiveHorseId(p.horseId) === input.firstHorseId,
+  ).length;
 
   const results = await prisma.$transaction(async (tx) => {
     // Upsert Result
@@ -52,7 +63,14 @@ export async function settleRace(raceId: number, input: ResultInput) {
     for (const pick of race.picks) {
       let points = 0;
       const breakdown: string[] = [];
-      if (pick.horseId === input.firstHorseId) {
+      const eff = effectiveHorseId(pick.horseId);
+      if (eff !== pick.horseId) {
+        const fav = horsesById.get(eff);
+        breakdown.push(
+          `Caballo dado de baja → favorito #${fav?.number ?? '?'} ${fav?.name ?? ''}`.trim(),
+        );
+      }
+      if (eff === input.firstHorseId) {
         points += 10;
         breakdown.push('1° lugar: +10');
         if (input.winnerDividend > 10) {
@@ -63,10 +81,10 @@ export async function settleRace(raceId: number, input: ResultInput) {
           points += 5;
           breakdown.push('Único que eligió al ganador: +5');
         }
-      } else if (pick.horseId === input.secondHorseId) {
+      } else if (eff === input.secondHorseId) {
         points += 5;
         breakdown.push('2° lugar: +5');
-      } else if (pick.horseId === input.thirdHorseId) {
+      } else if (eff === input.thirdHorseId) {
         points += 1;
         breakdown.push('3° lugar: +1');
       } else {

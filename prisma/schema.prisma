@@ -82,11 +82,13 @@ model Race {
 }
 
 model Horse {
-  id     Int    @id @default(autoincrement())
-  raceId Int
-  number Int
-  name   String
-  odds   Float?
+  id          Int     @id @default(autoincrement())
+  raceId      Int
+  number      Int
+  name        String
+  odds        Float?
+  isFavorite  Boolean @default(false)
+  isScratched Boolean @default(false)
 
   race  Race   @relation(fields: [raceId], references: [id], onDelete: Cascade)
   picks Pick[]
