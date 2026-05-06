@@ -36,7 +36,8 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // Admin: set the favorite horse of a race (single favorite per race).
-const favoriteSchema = z.object({ horseId: z.number().int().nullable() });
+// A favorite is required; null is not accepted.
+const favoriteSchema = z.object({ horseId: z.number().int() });
 
 router.post('/:id/favorite', requireAuth, requireAdmin, async (req, res, next) => {
   try {
@@ -47,14 +48,18 @@ router.post('/:id/favorite', requireAuth, requireAdmin, async (req, res, next) =
       include: { horses: true },
     });
     if (!race) return res.status(404).json({ error: 'Carrera no existe' });
-    if (horseId != null && !race.horses.some((h) => h.id === horseId)) {
+    const target = race.horses.find((h) => h.id === horseId);
+    if (!target) {
       return res.status(400).json({ error: 'El caballo no pertenece a la carrera' });
+    }
+    if (target.isScratched) {
+      return res
+        .status(400)
+        .json({ error: 'No se puede marcar como favorito a un caballo dado de baja' });
     }
     await prisma.$transaction(async (tx) => {
       await tx.horse.updateMany({ where: { raceId }, data: { isFavorite: false } });
-      if (horseId != null) {
-        await tx.horse.update({ where: { id: horseId }, data: { isFavorite: true } });
-      }
+      await tx.horse.update({ where: { id: horseId }, data: { isFavorite: true } });
     });
     await rescoreIfSettled(raceId);
     const horses = await prisma.horse.findMany({
@@ -76,6 +81,11 @@ router.post('/horses/:horseId/scratch', requireAuth, requireAdmin, async (req, r
     const { scratched } = scratchSchema.parse(req.body);
     const horse = await prisma.horse.findUnique({ where: { id: horseId } });
     if (!horse) return res.status(404).json({ error: 'Caballo no existe' });
+    if (scratched && horse.isFavorite) {
+      return res.status(400).json({
+        error: 'No se puede dar de baja al favorito. Marcá otro caballo como favorito primero.',
+      });
+    }
     const updated = await prisma.horse.update({
       where: { id: horseId },
       data: { isScratched: scratched },

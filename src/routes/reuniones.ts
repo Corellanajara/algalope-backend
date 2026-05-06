@@ -139,7 +139,7 @@ const createReunionSchema = z.object({
       z.object({
         raceNumber: z.number().int().min(1),
         horseCount: z.number().int().min(2).max(30).optional(),
-        favoriteNumber: z.number().int().min(1).optional().nullable(),
+        favoriteNumber: z.number().int().min(1),
         horses: z
           .array(
             z.object({
@@ -156,6 +156,14 @@ const createReunionSchema = z.object({
     .refine(
       (rs) => rs.every((r) => r.horseCount != null || (r.horses && r.horses.length >= 2)),
       'Cada carrera debe tener horseCount o un arreglo de horses',
+    )
+    .refine(
+      (rs) =>
+        rs.every((r) => {
+          const max = r.horseCount ?? r.horses?.length ?? 0;
+          return r.favoriteNumber >= 1 && r.favoriteNumber <= max;
+        }),
+      'El número del favorito debe estar dentro de los caballos de la carrera',
     ),
 });
 
