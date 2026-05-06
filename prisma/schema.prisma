@@ -54,6 +54,16 @@ model Reunion {
   racetrack Racetrack @relation(fields: [racetrackId], references: [id])
   week      RaceWeek  @relation(fields: [weekId], references: [id], onDelete: Cascade)
   races     Race[]
+  document  ReunionDocument?
+}
+
+model ReunionDocument {
+  reunionId  Int      @id
+  filename   String
+  data       Bytes
+  uploadedAt DateTime @default(now())
+
+  reunion Reunion @relation(fields: [reunionId], references: [id], onDelete: Cascade)
 }
 
 model Race {

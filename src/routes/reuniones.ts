@@ -35,6 +35,7 @@ router.get('/', async (req, res, next) => {
           },
           orderBy: { raceNumber: 'asc' },
         },
+        document: { select: { filename: true, uploadedAt: true } },
       },
       orderBy: [{ reunionDate: 'asc' }],
     });
@@ -91,6 +92,7 @@ router.get('/:id', async (req, res, next) => {
           include: { horses: { orderBy: { number: 'asc' } }, result: true },
           orderBy: { raceNumber: 'asc' },
         },
+        document: { select: { filename: true, uploadedAt: true } },
       },
     });
     if (!reunion) return res.status(404).json({ error: 'Reunión no existe' });
@@ -384,6 +386,68 @@ router.post('/:id/picks', requireAuth, async (req, res, next) => {
       include: { horse: true },
     });
     res.json({ ok: true, picks: saved });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// --- PDF document attached to a reunion ---
+
+const uploadDocSchema = z.object({
+  filename: z.string().min(1).max(255),
+  dataBase64: z.string().min(1),
+});
+
+const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20 MB
+
+router.post('/:id/document', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const reunionId = Number(req.params.id);
+    const { filename, dataBase64 } = uploadDocSchema.parse(req.body);
+    const cleaned = dataBase64.replace(/^data:application\/pdf;base64,/, '');
+    const buf = Buffer.from(cleaned, 'base64');
+    if (buf.length === 0) return res.status(400).json({ error: 'PDF vacío o inválido' });
+    if (buf.length > MAX_PDF_BYTES) {
+      return res.status(413).json({ error: 'PDF supera 20 MB' });
+    }
+    if (buf.slice(0, 4).toString('utf8') !== '%PDF') {
+      return res.status(400).json({ error: 'El archivo no es un PDF válido' });
+    }
+    const reunion = await prisma.reunion.findUnique({ where: { id: reunionId } });
+    if (!reunion) return res.status(404).json({ error: 'Reunión no existe' });
+    const doc = await prisma.reunionDocument.upsert({
+      where: { reunionId },
+      update: { filename, data: buf, uploadedAt: new Date() },
+      create: { reunionId, filename, data: buf },
+      select: { filename: true, uploadedAt: true },
+    });
+    res.status(201).json(doc);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get('/:id/document', requireAuth, async (req, res, next) => {
+  try {
+    const reunionId = Number(req.params.id);
+    const doc = await prisma.reunionDocument.findUnique({ where: { reunionId } });
+    if (!doc) return res.status(404).json({ error: 'No hay documento adjunto' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(doc.filename)}"`,
+    );
+    res.send(doc.data);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/:id/document', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const reunionId = Number(req.params.id);
+    await prisma.reunionDocument.delete({ where: { reunionId } }).catch(() => null);
+    res.status(204).end();
   } catch (e) {
     next(e);
   }

@@ -19,7 +19,7 @@ const app = express();
 
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 app.use(morgan('dev'));
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
