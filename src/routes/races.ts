@@ -97,4 +97,76 @@ router.post('/horses/:horseId/scratch', requireAuth, requireAdmin, async (req, r
   }
 });
 
+// Admin: set the total horse count of a race (adds or removes horses).
+const horseCountSchema = z.object({ count: z.number().int().min(2).max(30) });
+
+router.patch('/:id/horse-count', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const raceId = Number(req.params.id);
+    const { count } = horseCountSchema.parse(req.body);
+    const race = await prisma.race.findUnique({
+      where: { id: raceId },
+      include: { horses: { orderBy: { number: 'asc' } }, result: true },
+    });
+    if (!race) return res.status(404).json({ error: 'Carrera no existe' });
+
+    const current = race.horses.length;
+    if (count === current) {
+      return res.json(race.horses);
+    }
+
+    if (count > current) {
+      const existingNumbers = new Set(race.horses.map((h) => h.number));
+      const toCreate: { raceId: number; number: number; name: string }[] = [];
+      let n = 1;
+      while (toCreate.length < count - current) {
+        if (!existingNumbers.has(n)) {
+          toCreate.push({ raceId, number: n, name: `Caballo ${n}` });
+        }
+        n++;
+        if (n > 200) break;
+      }
+      await prisma.horse.createMany({ data: toCreate });
+    } else {
+      const toRemove = race.horses
+        .slice()
+        .sort((a, b) => b.number - a.number)
+        .slice(0, current - count);
+
+      const removeIds = toRemove.map((h) => h.id);
+
+      if (toRemove.some((h) => h.isFavorite)) {
+        return res.status(400).json({
+          error: 'No se puede quitar al favorito. Cambiá el favorito antes de reducir caballos.',
+        });
+      }
+      if (
+        race.result &&
+        [race.result.firstHorseId, race.result.secondHorseId, race.result.thirdHorseId].some((id) =>
+          removeIds.includes(id),
+        )
+      ) {
+        return res.status(400).json({
+          error: 'No se puede quitar caballos que están en el resultado de la carrera.',
+        });
+      }
+      const picks = await prisma.pick.count({ where: { horseId: { in: removeIds } } });
+      if (picks > 0) {
+        return res.status(400).json({
+          error: 'No se puede quitar caballos con picks de usuarios. Eliminá los picks primero.',
+        });
+      }
+      await prisma.horse.deleteMany({ where: { id: { in: removeIds } } });
+    }
+
+    const horses = await prisma.horse.findMany({
+      where: { raceId },
+      orderBy: { number: 'asc' },
+    });
+    res.json(horses);
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;
