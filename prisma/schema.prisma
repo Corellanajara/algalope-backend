@@ -36,7 +36,6 @@ model RaceWeek {
   endDate    DateTime
 
   reuniones Reunion[]
-  programas Programa[]
 
   @@unique([year, weekNumber])
 }
@@ -55,6 +54,7 @@ model Reunion {
   week      RaceWeek  @relation(fields: [weekId], references: [id], onDelete: Cascade)
   races     Race[]
   document  ReunionDocument?
+  programas Programa[]
 }
 
 model ReunionDocument {
@@ -137,15 +137,15 @@ model Score {
 }
 
 model Programa {
-  id     Int       @id @default(autoincrement())
-  userId Int
-  weekId Int
-  paid   Boolean   @default(false)
-  paidAt DateTime?
-  note   String?
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  reunionId Int
+  paid      Boolean   @default(false)
+  paidAt    DateTime?
+  note      String?
 
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  week RaceWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reunion Reunion @relation(fields: [reunionId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, weekId])
+  @@unique([userId, reunionId])
 }

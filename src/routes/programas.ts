@@ -5,19 +5,19 @@ import { requireAuth, requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/programas?weekId=
+// GET /api/programas?reunionId=
 router.get('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const weekId = req.query.weekId ? Number(req.query.weekId) : undefined;
+    const reunionId = req.query.reunionId ? Number(req.query.reunionId) : undefined;
     const where: any = {};
-    if (weekId) where.weekId = weekId;
+    if (reunionId) where.reunionId = reunionId;
     const list = await prisma.programa.findMany({
       where,
       include: {
         user: { select: { id: true, displayName: true, email: true } },
-        week: true,
+        reunion: { include: { racetrack: true } },
       },
-      orderBy: [{ weekId: 'desc' }, { id: 'asc' }],
+      orderBy: [{ reunionId: 'desc' }, { id: 'asc' }],
     });
     res.json(list);
   } catch (e) {
@@ -27,7 +27,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res, next) => {
 
 const upsertSchema = z.object({
   userId: z.number().int(),
-  weekId: z.number().int(),
+  reunionId: z.number().int(),
   paid: z.boolean().optional(),
   note: z.string().nullable().optional(),
 });
@@ -37,7 +37,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
     const data = upsertSchema.parse(req.body);
     const paid = data.paid ?? false;
     const programa = await prisma.programa.upsert({
-      where: { userId_weekId: { userId: data.userId, weekId: data.weekId } },
+      where: { userId_reunionId: { userId: data.userId, reunionId: data.reunionId } },
       update: {
         paid,
         paidAt: paid ? new Date() : null,
@@ -45,14 +45,14 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
       },
       create: {
         userId: data.userId,
-        weekId: data.weekId,
+        reunionId: data.reunionId,
         paid,
         paidAt: paid ? new Date() : null,
         note: data.note ?? null,
       },
       include: {
         user: { select: { id: true, displayName: true, email: true } },
-        week: true,
+        reunion: { include: { racetrack: true } },
       },
     });
     res.status(201).json(programa);
@@ -81,7 +81,7 @@ router.patch('/:id', requireAuth, requireAdmin, async (req, res, next) => {
       data: updateData,
       include: {
         user: { select: { id: true, displayName: true, email: true } },
-        week: true,
+        reunion: { include: { racetrack: true } },
       },
     });
     res.json(programa);
