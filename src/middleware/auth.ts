@@ -2,11 +2,14 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../db';
 
+export type Role = 'SUPERADMIN' | 'ADMIN' | 'USER';
+
 export interface AuthUser {
   id: number;
   email: string;
-  role: string;
+  role: Role;
   displayName: string;
+  adminId: number | null;
 }
 
 declare global {
@@ -36,8 +39,9 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.user = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role as Role,
       displayName: user.displayName,
+      adminId: (user as any).adminId ?? null,
     };
     next();
   } catch {
@@ -46,8 +50,37 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || req.user.role !== 'ADMIN') {
+  const role = req.user?.role;
+  if (role !== 'ADMIN' && role !== 'SUPERADMIN') {
     return res.status(403).json({ error: 'Requiere rol ADMIN' });
   }
   next();
+}
+
+export function requireSuperadmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role !== 'SUPERADMIN') {
+    return res.status(403).json({ error: 'Requiere rol SUPERADMIN' });
+  }
+  next();
+}
+
+// Devuelve el adminId que define el "tenant" de la petición:
+//   - ADMIN  → su propio id (es dueño del tenant).
+//   - USER   → el id de su admin asignado.
+//   - SUPERADMIN → null (ve todo o filtra por query param `?adminId=`).
+//
+// Las rutas usan esto para filtrar todas las queries por tenant.
+export function getTenantAdminId(req: Request): number | null {
+  const u = req.user;
+  if (!u) return null;
+  if (u.role === 'ADMIN') return u.id;
+  if (u.role === 'USER') return u.adminId;
+  // SUPERADMIN: opcionalmente puede mirar el tenant de un admin específico
+  // mediante ?adminId= o header x-admin-id; si no, ve todo (null).
+  const q = req.query.adminId ?? req.headers['x-admin-id'];
+  if (q != null && q !== '') {
+    const n = Number(q);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }

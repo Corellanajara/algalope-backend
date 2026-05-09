@@ -4,7 +4,6 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/picks/me — all picks for the logged-in user
 router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const picks = await prisma.pick.findMany({

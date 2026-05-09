@@ -1,20 +1,27 @@
 import { Router } from 'express';
 import { prisma } from '../db';
+import { requireAuth, getTenantAdminId } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/leaderboard?weekId=&reunionId=  (omit both for overall)
-// reunionId takes precedence over weekId.
-router.get('/', async (req, res, next) => {
+// GET /api/leaderboard?weekId=&reunionId=  (sin parámetros = global del tenant)
+// reunionId tiene precedencia sobre weekId.
+router.get('/', requireAuth, async (req, res, next) => {
   try {
     const weekId = req.query.weekId ? Number(req.query.weekId) : undefined;
     const reunionId = req.query.reunionId ? Number(req.query.reunionId) : undefined;
+    const tenant = getTenantAdminId(req);
 
-    const where: any = reunionId
-      ? { race: { reunionId } }
+    const reunionFilter: any = reunionId
+      ? { id: reunionId }
       : weekId
-      ? { race: { reunion: { weekId } } }
+      ? { weekId }
       : {};
+    if (req.user!.role !== 'SUPERADMIN' || tenant != null) {
+      reunionFilter.adminId = tenant;
+    }
+
+    const where: any = { race: { reunion: reunionFilter } };
 
     const scores = await prisma.score.findMany({
       where,

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
-import { requireAuth, requireAdmin } from '../middleware/auth';
+import { requireAuth, requireAdmin, getTenantAdminId } from '../middleware/auth';
 import { settleRace } from '../services/scoring';
 
 const router = Router();
@@ -17,11 +17,24 @@ async function rescoreIfSettled(raceId: number) {
   });
 }
 
-// GET /api/races/:id — single race detail (used by result form)
-router.get('/:id', async (req, res, next) => {
+async function assertRaceInTenant(raceId: number, req: any): Promise<boolean> {
+  if (req.user!.role === 'SUPERADMIN') return true;
+  const race = await prisma.race.findUnique({
+    where: { id: raceId },
+    include: { reunion: true },
+  });
+  if (!race) return false;
+  return (race.reunion as any).adminId === getTenantAdminId(req);
+}
+
+router.get('/:id', requireAuth, async (req, res, next) => {
   try {
+    const id = Number(req.params.id);
+    if (!(await assertRaceInTenant(id, req))) {
+      return res.status(404).json({ error: 'Carrera no existe' });
+    }
     const race = await prisma.race.findUnique({
-      where: { id: Number(req.params.id) },
+      where: { id },
       include: {
         horses: { orderBy: { number: 'asc' } },
         reunion: { include: { racetrack: true } },
@@ -35,13 +48,14 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// Admin: set the favorite horse of a race (single favorite per race).
-// A favorite is required; null is not accepted.
 const favoriteSchema = z.object({ horseId: z.number().int() });
 
 router.post('/:id/favorite', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const raceId = Number(req.params.id);
+    if (!(await assertRaceInTenant(raceId, req))) {
+      return res.status(404).json({ error: 'Carrera no existe' });
+    }
     const { horseId } = favoriteSchema.parse(req.body);
     const race = await prisma.race.findUnique({
       where: { id: raceId },
@@ -72,15 +86,17 @@ router.post('/:id/favorite', requireAuth, requireAdmin, async (req, res, next) =
   }
 });
 
-// Admin: toggle scratched flag on a horse.
 const scratchSchema = z.object({ scratched: z.boolean() });
 
 router.post('/horses/:horseId/scratch', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const horseId = Number(req.params.horseId);
-    const { scratched } = scratchSchema.parse(req.body);
     const horse = await prisma.horse.findUnique({ where: { id: horseId } });
     if (!horse) return res.status(404).json({ error: 'Caballo no existe' });
+    if (!(await assertRaceInTenant(horse.raceId, req))) {
+      return res.status(404).json({ error: 'Caballo no existe' });
+    }
+    const { scratched } = scratchSchema.parse(req.body);
     if (scratched && horse.isFavorite) {
       return res.status(400).json({
         error: 'No se puede dar de baja al favorito. Marcá otro caballo como favorito primero.',
@@ -97,12 +113,14 @@ router.post('/horses/:horseId/scratch', requireAuth, requireAdmin, async (req, r
   }
 });
 
-// Admin: set the total horse count of a race (adds or removes horses).
 const horseCountSchema = z.object({ count: z.number().int().min(2).max(30) });
 
 router.patch('/:id/horse-count', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const raceId = Number(req.params.id);
+    if (!(await assertRaceInTenant(raceId, req))) {
+      return res.status(404).json({ error: 'Carrera no existe' });
+    }
     const { count } = horseCountSchema.parse(req.body);
     const race = await prisma.race.findUnique({
       where: { id: raceId },

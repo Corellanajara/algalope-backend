@@ -7,25 +7,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Roles: SUPERADMIN crea ADMINs; cada ADMIN gestiona su propio tenant
+// (racetracks, reuniones, programas, usuarios). Los USERs pertenecen a
+// exactamente un ADMIN (User.adminId) y solo ven el contenido de ese tenant.
 model User {
   id           Int      @id @default(autoincrement())
   email        String   @unique
   passwordHash String
   displayName  String
   pseudonym    String?
-  role         String   @default("USER")
+  role         String   @default("USER") // SUPERADMIN | ADMIN | USER
+  adminId      Int?
   createdAt    DateTime @default(now())
+
+  admin       User?  @relation("AdminUsers", fields: [adminId], references: [id], onDelete: SetNull)
+  managedUsers User[] @relation("AdminUsers")
 
   picks     Pick[]
   scores    Score[]
   programas Programa[]
+
+  ownedRacetracks Racetrack[] @relation("RacetrackOwner")
+  ownedWeeks      RaceWeek[]  @relation("RaceWeekOwner")
+  ownedReuniones  Reunion[]   @relation("ReunionOwner")
 }
 
 model Racetrack {
   id        Int       @id @default(autoincrement())
-  name      String    @unique
+  name      String
   city      String
+  adminId   Int?
   reuniones Reunion[]
+  admin     User?     @relation("RacetrackOwner", fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@unique([adminId, name])
 }
 
 model RaceWeek {
@@ -34,16 +49,19 @@ model RaceWeek {
   weekNumber Int
   startDate  DateTime
   endDate    DateTime
+  adminId    Int?
 
   reuniones Reunion[]
+  admin     User?     @relation("RaceWeekOwner", fields: [adminId], references: [id], onDelete: SetNull)
 
-  @@unique([year, weekNumber])
+  @@unique([adminId, year, weekNumber])
 }
 
 model Reunion {
   id          Int      @id @default(autoincrement())
   racetrackId Int
   weekId      Int
+  adminId     Int?
   name        String
   reunionDate DateTime
   deadline    DateTime
@@ -52,6 +70,7 @@ model Reunion {
 
   racetrack Racetrack @relation(fields: [racetrackId], references: [id])
   week      RaceWeek  @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  admin     User?     @relation("ReunionOwner", fields: [adminId], references: [id], onDelete: SetNull)
   races     Race[]
   document  ReunionDocument?
   programas Programa[]

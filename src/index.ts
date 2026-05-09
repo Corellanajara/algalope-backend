@@ -13,6 +13,7 @@ import resultRoutes from './routes/results';
 import userRoutes from './routes/users';
 import leaderboardRoutes from './routes/leaderboard';
 import programaRoutes from './routes/programas';
+import adminRoutes from './routes/admins';
 import { errorHandler } from './middleware/error';
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/results', resultRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/programas', programaRoutes);
+app.use('/api/admins', adminRoutes);
 
 app.use(errorHandler);
 

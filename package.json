@@ -10,6 +10,7 @@
     "db:setup": "prisma migrate dev --name init && tsx prisma/seed.ts",
     "seed": "tsx prisma/seed.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
+    "promote:superadmin": "tsx prisma/promote-superadmin.ts",
     "prisma": "prisma"
   },
   "dependencies": {

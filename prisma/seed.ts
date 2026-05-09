@@ -18,9 +18,71 @@ function getISOWeek(d: Date): { year: number; week: number } {
   return { year: date.getUTCFullYear(), week };
 }
 
+async function upsertUser(opts: {
+  email: string;
+  password: string;
+  displayName: string;
+  role: 'SUPERADMIN' | 'ADMIN' | 'USER';
+  adminId?: number | null;
+}) {
+  const passwordHash = await bcrypt.hash(opts.password, 10);
+  return prisma.user.upsert({
+    where: { email: opts.email },
+    update: {
+      displayName: opts.displayName,
+      role: opts.role,
+      passwordHash,
+      adminId: opts.adminId ?? null,
+    },
+    create: {
+      email: opts.email,
+      passwordHash,
+      displayName: opts.displayName,
+      role: opts.role,
+      adminId: opts.adminId ?? null,
+    },
+  });
+}
+
 async function main() {
   console.log('🌱 Seeding...');
 
+  // 1) SUPERADMIN por defecto. No pertenece a ningún tenant (adminId null)
+  //    y puede ver/operar todo lo que ven los ADMIN.
+  await upsertUser({
+    email: 'superadmin@algalope.cl',
+    password: 'superadmin123',
+    displayName: 'Super Administrador',
+    role: 'SUPERADMIN',
+    adminId: null,
+  });
+
+  // 2) ADMIN demo. Es dueño del tenant demo: las reuniones, racetracks y
+  //    usuarios siguientes se cuelgan de su id.
+  const admin = await upsertUser({
+    email: 'admin@algalope.cl',
+    password: 'admin123',
+    displayName: 'Administrador',
+    role: 'ADMIN',
+    adminId: null,
+  });
+
+  // 3) USERs demo, todos dentro del tenant del ADMIN demo.
+  const demoUsers = [
+    { email: 'demo@algalope.cl', password: 'demo123', displayName: 'Demo' },
+    { email: 'rival@algalope.cl', password: 'rival123', displayName: 'Rival' },
+    { email: 'jorge@algalope.cl', password: 'jorge123', displayName: 'Jorge' },
+    { email: 'maria@algalope.cl', password: 'maria123', displayName: 'María' },
+    { email: 'pedro@algalope.cl', password: 'pedro123', displayName: 'Pedro' },
+    { email: 'ana@algalope.cl', password: 'ana123', displayName: 'Ana' },
+    { email: 'luis@algalope.cl', password: 'luis123', displayName: 'Luis' },
+  ];
+  for (const u of demoUsers) {
+    await upsertUser({ ...u, role: 'USER', adminId: admin.id });
+  }
+
+  // 4) Racetracks demo, vinculados al tenant del ADMIN demo. La unicidad de
+  //    Racetrack es (adminId, name) así que upserteamos por esa clave.
   const tracks = [
     { name: 'Club Hípico de Santiago', city: 'Santiago' },
     { name: 'Hipódromo Chile', city: 'Santiago' },
@@ -28,52 +90,40 @@ async function main() {
     { name: 'Club Hípico de Concepción', city: 'Concepción' },
   ];
   for (const t of tracks) {
-    await prisma.racetrack.upsert({ where: { name: t.name }, update: {}, create: t });
-  }
-
-  const quickAccounts = [
-    { email: 'demo@algalope.cl', password: 'demo123', displayName: 'Demo', role: 'USER' },
-    { email: 'admin@algalope.cl', password: 'admin123', displayName: 'Administrador', role: 'ADMIN' },
-    { email: 'rival@algalope.cl', password: 'rival123', displayName: 'Rival', role: 'USER' },
-    { email: 'jorge@algalope.cl', password: 'jorge123', displayName: 'Jorge', role: 'USER' },
-    { email: 'maria@algalope.cl', password: 'maria123', displayName: 'María', role: 'USER' },
-    { email: 'pedro@algalope.cl', password: 'pedro123', displayName: 'Pedro', role: 'USER' },
-    { email: 'ana@algalope.cl', password: 'ana123', displayName: 'Ana', role: 'USER' },
-    { email: 'luis@algalope.cl', password: 'luis123', displayName: 'Luis', role: 'USER' },
-  ];
-
-  for (const a of quickAccounts) {
-    const passwordHash = await bcrypt.hash(a.password, 10);
-    await prisma.user.upsert({
-      where: { email: a.email },
-      update: { displayName: a.displayName, role: a.role, passwordHash },
-      create: {
-        email: a.email,
-        passwordHash,
-        displayName: a.displayName,
-        role: a.role,
-      },
+    await prisma.racetrack.upsert({
+      where: { adminId_name: { adminId: admin.id, name: t.name } },
+      update: { city: t.city },
+      create: { ...t, adminId: admin.id },
     });
   }
 
   const now = new Date();
   const { year, week } = getISOWeek(now);
   const raceWeek = await prisma.raceWeek.upsert({
-    where: { year_weekNumber: { year, weekNumber: week } },
+    where: { adminId_year_weekNumber: { adminId: admin.id, year, weekNumber: week } },
     update: {},
-    create: { year, weekNumber: week, startDate: now, endDate: addDays(now, 7) },
+    create: {
+      adminId: admin.id,
+      year,
+      weekNumber: week,
+      startDate: now,
+      endDate: addDays(now, 7),
+    },
   });
 
-  const allTracks = await prisma.racetrack.findMany();
-  const existing = await prisma.reunion.count({ where: { weekId: raceWeek.id } });
+  const adminTracks = await prisma.racetrack.findMany({ where: { adminId: admin.id } });
+  const existing = await prisma.reunion.count({
+    where: { weekId: raceWeek.id, adminId: admin.id },
+  });
 
   if (existing === 0) {
     // Reunión 1: Club Hípico de Santiago — 3 carreras
     const r1Date = addDays(now, 2);
     const r1 = await prisma.reunion.create({
       data: {
-        racetrackId: allTracks.find((t) => t.name === 'Club Hípico de Santiago')!.id,
+        racetrackId: adminTracks.find((t) => t.name === 'Club Hípico de Santiago')!.id,
         weekId: raceWeek.id,
+        adminId: admin.id,
         name: 'Reunión Sábado',
         reunionDate: r1Date,
         deadline: new Date(r1Date.getTime() - 60 * 60 * 1000),
@@ -102,8 +152,9 @@ async function main() {
     const r2Date = addDays(now, 4);
     const r2 = await prisma.reunion.create({
       data: {
-        racetrackId: allTracks.find((t) => t.name === 'Hipódromo Chile')!.id,
+        racetrackId: adminTracks.find((t) => t.name === 'Hipódromo Chile')!.id,
         weekId: raceWeek.id,
+        adminId: admin.id,
         name: 'Reunión Lunes',
         reunionDate: r2Date,
         deadline: new Date(r2Date.getTime() - 60 * 60 * 1000),
@@ -134,8 +185,10 @@ async function main() {
 
   console.log('✅ Seed completo.');
   console.log('   Cuentas de acceso rápido:');
-  for (const a of quickAccounts) {
-    console.log(`   • ${a.displayName.padEnd(14)} ${a.email} / ${a.password}`);
+  console.log(`   • 👑 Super Admin    superadmin@algalope.cl / superadmin123`);
+  console.log(`   • 🛠  Administrador  admin@algalope.cl      / admin123`);
+  for (const u of demoUsers) {
+    console.log(`   •     ${u.displayName.padEnd(14)} ${u.email} / ${u.password}`);
   }
 }
 

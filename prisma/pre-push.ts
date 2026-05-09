@@ -2,9 +2,10 @@
 // place instead of failing on incompatible changes.
 //
 // Why this exists: the schema renamed `Program` → `Reunion`, `programDate` →
-// `reunionDate`, `Race.programId` → `Race.reunionId`, and dropped `Payment`.
-// Without these renames, `db push` sees them as drop+create and refuses on a
-// non-empty DB.
+// `reunionDate`, `Race.programId` → `Race.reunionId`, dropped `Payment`, and
+// later added multi-tenant ownership (`adminId` columns on User, Racetrack,
+// RaceWeek and Reunion). Without these renames, `db push` sees them as
+// drop+create and refuses on a non-empty DB.
 //
 // Each block uses IF EXISTS / IF NOT EXISTS so it's safe to re-run.
 
@@ -38,6 +39,14 @@ async function columnExists(table: string, column: string): Promise<boolean> {
   return rows[0]?.exists ?? false;
 }
 
+async function indexExists(name: string): Promise<boolean> {
+  const rows = await prisma.$queryRawUnsafe<{ exists: boolean }[]>(
+    `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname=$1) AS exists`,
+    name,
+  );
+  return rows[0]?.exists ?? false;
+}
+
 async function main() {
   console.log('🔧 Pre-push: aplicando renombres idempotentes…');
 
@@ -46,32 +55,48 @@ async function main() {
     await exec('DROP TABLE IF EXISTS "Payment" CASCADE');
   }
 
-  // 2) Rename Program → Reunion (table + sequence + PK + indexes are renamed
-  //    automatically with the table in PostgreSQL >= 9).
+  // 2) Rename Program → Reunion.
   if ((await tableExists('Program')) && !(await tableExists('Reunion'))) {
     await exec('ALTER TABLE "Program" RENAME TO "Reunion"');
   }
-
-  // 3) Rename column programDate → reunionDate on Reunion.
   if ((await tableExists('Reunion')) && (await columnExists('Reunion', 'programDate'))) {
     await exec('ALTER TABLE "Reunion" RENAME COLUMN "programDate" TO "reunionDate"');
   }
-
-  // 4) Rename column Race.programId → Race.reunionId.
   if ((await tableExists('Race')) && (await columnExists('Race', 'programId'))) {
     await exec('ALTER TABLE "Race" RENAME COLUMN "programId" TO "reunionId"');
   }
-
-  // 5) Programa: weekId → reunionId. The mapping from a (user, week) payment
-  //    to a single reunion of that week is ambiguous, so we drop the table and
-  //    let `db push` recreate it. Existing payment rows are lost — same outcome
-  //    as the migration.sql, but compatible with the db-push deploy flow.
   if (
     (await tableExists('Programa')) &&
     (await columnExists('Programa', 'weekId')) &&
     !(await columnExists('Programa', 'reunionId'))
   ) {
     await exec('DROP TABLE IF EXISTS "Programa" CASCADE');
+  }
+
+  // 3) Multi-tenant: add adminId columns (nullable) where missing.
+  if ((await tableExists('User')) && !(await columnExists('User', 'adminId'))) {
+    await exec('ALTER TABLE "User" ADD COLUMN "adminId" INTEGER');
+  }
+  if ((await tableExists('Racetrack')) && !(await columnExists('Racetrack', 'adminId'))) {
+    await exec('ALTER TABLE "Racetrack" ADD COLUMN "adminId" INTEGER');
+  }
+  if ((await tableExists('RaceWeek')) && !(await columnExists('RaceWeek', 'adminId'))) {
+    await exec('ALTER TABLE "RaceWeek" ADD COLUMN "adminId" INTEGER');
+  }
+  if ((await tableExists('Reunion')) && !(await columnExists('Reunion', 'adminId'))) {
+    await exec('ALTER TABLE "Reunion" ADD COLUMN "adminId" INTEGER');
+  }
+
+  // 4) The `name` column in Racetrack used to be globally unique; now it is
+  //    unique per (adminId, name). Drop the old single-column unique if present.
+  if (await indexExists('Racetrack_name_key')) {
+    await exec('ALTER TABLE "Racetrack" DROP CONSTRAINT IF EXISTS "Racetrack_name_key"');
+    await exec('DROP INDEX IF EXISTS "Racetrack_name_key"');
+  }
+  // RaceWeek (year, weekNumber) was unique; now it's unique per (adminId, year, weekNumber).
+  if (await indexExists('RaceWeek_year_weekNumber_key')) {
+    await exec('ALTER TABLE "RaceWeek" DROP CONSTRAINT IF EXISTS "RaceWeek_year_weekNumber_key"');
+    await exec('DROP INDEX IF EXISTS "RaceWeek_year_weekNumber_key"');
   }
 
   console.log('✅ Pre-push completo.');
