@@ -40,5 +40,5 @@ app.use(errorHandler);
 
 const PORT = Number(process.env.PORT || 4000);
 app.listen(PORT, () => {
-  console.log(`🏇 Algalope API escuchando en http://localhost:${PORT}`);
+  console.log(`🏇 Por Una Cabeza API escuchando en http://localhost:${PORT}`);
 });
