@@ -26,14 +26,11 @@ async function upsertUser(opts: {
   adminId?: number | null;
 }) {
   const passwordHash = await bcrypt.hash(opts.password, 10);
+  // Nunca se sobrescribe la contraseña de un usuario existente: antes el seed
+  // restablecía las claves por defecto en cada arranque.
   return prisma.user.upsert({
     where: { email: opts.email },
-    update: {
-      displayName: opts.displayName,
-      role: opts.role,
-      passwordHash,
-      adminId: opts.adminId ?? null,
-    },
+    update: {},
     create: {
       email: opts.email,
       passwordHash,
@@ -56,6 +53,14 @@ async function main() {
     role: 'SUPERADMIN',
     adminId: null,
   });
+
+  // En producción (`npm start`) se corre con --base: solo se asegura que exista
+  // el SUPERADMIN. Los datos demo (admin, usuarios, hipódromos y reuniones de
+  // ejemplo) quedan solo para desarrollo (`npm run seed` / `db:setup`).
+  if (process.argv.includes('--base')) {
+    console.log('✅ Seed base completo (sin datos demo).');
+    return;
+  }
 
   // 2) ADMIN demo. Es dueño del tenant demo: las reuniones, racetracks y
   //    usuarios siguientes se cuelgan de su id.

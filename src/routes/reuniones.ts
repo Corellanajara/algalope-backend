@@ -27,14 +27,23 @@ router.get('/', requireAuth, async (req, res, next) => {
 
     if (weekId) where.weekId = weekId;
     else if (current) {
+      // "Reuniones vigentes" para la pantalla principal del jugador:
+      //   - todas las que siguen abiertas (deadline futuro), sin importar la semana;
+      //   - las de los últimos 7 días (para ver cierres y resultados recientes);
+      //   - las de la última semana cargada (comportamiento anterior).
+      // Antes se filtraba solo por la última semana, por lo que al cargar una
+      // reunión de la semana siguiente se ocultaban reuniones aún abiertas.
       const weekWhere: any = {};
       if (where.adminId !== undefined) weekWhere.adminId = where.adminId;
       const latestWeek = await prisma.raceWeek.findFirst({
         where: weekWhere,
         orderBy: [{ year: 'desc' }, { weekNumber: 'desc' }],
       });
-      if (!latestWeek) return res.json([]);
-      where.weekId = latestWeek.id;
+      const now = new Date();
+      const recent = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const or: any[] = [{ deadline: { gt: now } }, { reunionDate: { gte: recent } }];
+      if (latestWeek) or.push({ weekId: latestWeek.id });
+      where.OR = or;
     }
     if (racetrackId) where.racetrackId = racetrackId;
 
