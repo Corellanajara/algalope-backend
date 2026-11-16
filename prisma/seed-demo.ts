@@ -9,25 +9,25 @@ async function main() {
 
   const demoHash = await bcrypt.hash('demo123', 10);
   const demo = await prisma.user.upsert({
-    where: { email: 'demo@algalope.cl' },
+    where: { email: 'demo@porunacabeza.cl' },
     update: {},
-    create: { email: 'demo@algalope.cl', passwordHash: demoHash, displayName: 'Demo', role: 'USER' },
+    create: { email: 'demo@porunacabeza.cl', passwordHash: demoHash, displayName: 'Demo', role: 'USER' },
   });
 
   const rivalHash = await bcrypt.hash('rival123', 10);
   const rival = await prisma.user.upsert({
-    where: { email: 'rival@algalope.cl' },
+    where: { email: 'rival@porunacabeza.cl' },
     update: {},
-    create: { email: 'rival@algalope.cl', passwordHash: rivalHash, displayName: 'Rival', role: 'USER' },
+    create: { email: 'rival@porunacabeza.cl', passwordHash: rivalHash, displayName: 'Rival', role: 'USER' },
   });
 
   // 5 cuentas de prueba adicionales para login rápido
   const extras = [
-    { email: 'jorge@algalope.cl', displayName: 'Jorge', password: 'jorge123' },
-    { email: 'maria@algalope.cl', displayName: 'María', password: 'maria123' },
-    { email: 'pedro@algalope.cl', displayName: 'Pedro', password: 'pedro123' },
-    { email: 'ana@algalope.cl', displayName: 'Ana', password: 'ana123' },
-    { email: 'luis@algalope.cl', displayName: 'Luis', password: 'luis123' },
+    { email: 'jorge@porunacabeza.cl', displayName: 'Jorge', password: 'jorge123' },
+    { email: 'maria@porunacabeza.cl', displayName: 'María', password: 'maria123' },
+    { email: 'pedro@porunacabeza.cl', displayName: 'Pedro', password: 'pedro123' },
+    { email: 'ana@porunacabeza.cl', displayName: 'Ana', password: 'ana123' },
+    { email: 'luis@porunacabeza.cl', displayName: 'Luis', password: 'luis123' },
   ];
   const extraUsers: any[] = [];
   for (const u of extras) {
@@ -93,8 +93,8 @@ async function main() {
   }
 
   console.log('✅ Demo listo.');
-  console.log('   Demo:  demo@algalope.cl  / demo123');
-  console.log('   Rival: rival@algalope.cl / rival123');
+  console.log('   Demo:  demo@porunacabeza.cl  / demo123');
+  console.log('   Rival: rival@porunacabeza.cl / rival123');
   for (const u of extras) {
     console.log(`   ${u.displayName.padEnd(6)}: ${u.email} / ${u.password}`);
   }

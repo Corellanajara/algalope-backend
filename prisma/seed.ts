@@ -47,7 +47,7 @@ async function main() {
   // 1) SUPERADMIN por defecto. No pertenece a ningún tenant (adminId null)
   //    y puede ver/operar todo lo que ven los ADMIN.
   await upsertUser({
-    email: 'superadmin@algalope.cl',
+    email: 'superadmin@porunacabeza.cl',
     password: 'superadmin123',
     displayName: 'Super Administrador',
     role: 'SUPERADMIN',
@@ -79,7 +79,7 @@ async function main() {
   // 2) ADMIN demo. Es dueño del tenant demo: las reuniones, racetracks y
   //    usuarios siguientes se cuelgan de su id.
   const admin = await upsertUser({
-    email: 'admin@algalope.cl',
+    email: 'admin@porunacabeza.cl',
     password: 'admin123',
     displayName: 'Administrador',
     role: 'ADMIN',
@@ -88,13 +88,13 @@ async function main() {
 
   // 3) USERs demo, todos dentro del tenant del ADMIN demo.
   const demoUsers = [
-    { email: 'demo@algalope.cl', password: 'demo123', displayName: 'Demo' },
-    { email: 'rival@algalope.cl', password: 'rival123', displayName: 'Rival' },
-    { email: 'jorge@algalope.cl', password: 'jorge123', displayName: 'Jorge' },
-    { email: 'maria@algalope.cl', password: 'maria123', displayName: 'María' },
-    { email: 'pedro@algalope.cl', password: 'pedro123', displayName: 'Pedro' },
-    { email: 'ana@algalope.cl', password: 'ana123', displayName: 'Ana' },
-    { email: 'luis@algalope.cl', password: 'luis123', displayName: 'Luis' },
+    { email: 'demo@porunacabeza.cl', password: 'demo123', displayName: 'Demo' },
+    { email: 'rival@porunacabeza.cl', password: 'rival123', displayName: 'Rival' },
+    { email: 'jorge@porunacabeza.cl', password: 'jorge123', displayName: 'Jorge' },
+    { email: 'maria@porunacabeza.cl', password: 'maria123', displayName: 'María' },
+    { email: 'pedro@porunacabeza.cl', password: 'pedro123', displayName: 'Pedro' },
+    { email: 'ana@porunacabeza.cl', password: 'ana123', displayName: 'Ana' },
+    { email: 'luis@porunacabeza.cl', password: 'luis123', displayName: 'Luis' },
   ];
   for (const u of demoUsers) {
     await upsertUser({ ...u, role: 'USER', adminId: admin.id });
@@ -188,8 +188,8 @@ async function main() {
 
   console.log('✅ Seed completo.');
   console.log('   Cuentas de acceso rápido:');
-  console.log(`   • 👑 Super Admin    superadmin@algalope.cl / superadmin123`);
-  console.log(`   • 🛠  Administrador  admin@algalope.cl      / admin123`);
+  console.log(`   • 👑 Super Admin    superadmin@porunacabeza.cl / superadmin123`);
+  console.log(`   • 🛠  Administrador  admin@porunacabeza.cl      / admin123`);
   for (const u of demoUsers) {
     console.log(`   •     ${u.displayName.padEnd(14)} ${u.email} / ${u.password}`);
   }
