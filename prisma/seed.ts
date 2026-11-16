@@ -54,6 +54,20 @@ async function main() {
     adminId: null,
   });
 
+  // Catálogo global de clubes hípicos (adminId null): todos los ADMIN ven los
+  // mismos. Se crea también en producción (--base) para que el selector de
+  // "Club hípico" nunca quede vacío.
+  const tracks = [
+    { name: 'Club Hípico de Santiago', city: 'Santiago' },
+    { name: 'Hipódromo Chile', city: 'Santiago' },
+    { name: 'Valparaíso Sporting Club', city: 'Viña del Mar' },
+    { name: 'Club Hípico de Concepción', city: 'Concepción' },
+  ];
+  for (const t of tracks) {
+    const found = await prisma.racetrack.findFirst({ where: { name: t.name, adminId: null } });
+    if (!found) await prisma.racetrack.create({ data: { ...t, adminId: null } });
+  }
+
   // En producción (`npm start`) se corre con --base: solo se asegura que exista
   // el SUPERADMIN. Los datos demo (admin, usuarios, hipódromos y reuniones de
   // ejemplo) quedan solo para desarrollo (`npm run seed` / `db:setup`).
@@ -86,22 +100,6 @@ async function main() {
     await upsertUser({ ...u, role: 'USER', adminId: admin.id });
   }
 
-  // 4) Racetracks demo, vinculados al tenant del ADMIN demo. La unicidad de
-  //    Racetrack es (adminId, name) así que upserteamos por esa clave.
-  const tracks = [
-    { name: 'Club Hípico de Santiago', city: 'Santiago' },
-    { name: 'Hipódromo Chile', city: 'Santiago' },
-    { name: 'Valparaíso Sporting Club', city: 'Viña del Mar' },
-    { name: 'Club Hípico de Concepción', city: 'Concepción' },
-  ];
-  for (const t of tracks) {
-    await prisma.racetrack.upsert({
-      where: { adminId_name: { adminId: admin.id, name: t.name } },
-      update: { city: t.city },
-      create: { ...t, adminId: admin.id },
-    });
-  }
-
   const now = new Date();
   const { year, week } = getISOWeek(now);
   const raceWeek = await prisma.raceWeek.upsert({
@@ -116,7 +114,7 @@ async function main() {
     },
   });
 
-  const adminTracks = await prisma.racetrack.findMany({ where: { adminId: admin.id } });
+  const adminTracks = await prisma.racetrack.findMany({ where: { adminId: null } });
   const existing = await prisma.reunion.count({
     where: { weekId: raceWeek.id, adminId: admin.id },
   });

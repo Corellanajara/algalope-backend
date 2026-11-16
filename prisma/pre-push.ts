@@ -99,6 +99,36 @@ async function main() {
     await exec('DROP INDEX IF EXISTS "RaceWeek_year_weekNumber_key"');
   }
 
+  // 5) Los clubes hípicos pasan a ser un catálogo global (adminId NULL) que
+  //    todos los ADMIN ven igual. Se fusionan los duplicados por nombre (se
+  //    conserva el global si existe, si no el de menor id), se re-apuntan las
+  //    reuniones al club conservado y se borran los duplicados.
+  if ((await tableExists('Racetrack')) && (await columnExists('Racetrack', 'adminId'))) {
+    try {
+      await prisma.$transaction([
+        prisma.$executeRawUnsafe(`
+          WITH canon AS (
+            SELECT name, (ARRAY_AGG(id ORDER BY ("adminId" IS NOT NULL), id))[1] AS keep_id
+            FROM "Racetrack" GROUP BY name
+          )
+          UPDATE "Reunion" r SET "racetrackId" = c.keep_id
+          FROM "Racetrack" t JOIN canon c ON c.name = t.name
+          WHERE r."racetrackId" = t.id AND t.id <> c.keep_id`),
+        prisma.$executeRawUnsafe(`
+          WITH canon AS (
+            SELECT name, (ARRAY_AGG(id ORDER BY ("adminId" IS NOT NULL), id))[1] AS keep_id
+            FROM "Racetrack" GROUP BY name
+          )
+          DELETE FROM "Racetrack" t USING canon c
+          WHERE t.name = c.name AND t.id <> c.keep_id`),
+        prisma.$executeRawUnsafe(`UPDATE "Racetrack" SET "adminId" = NULL WHERE "adminId" IS NOT NULL`),
+      ]);
+      console.log('   ✔ Racetracks consolidados en catálogo global');
+    } catch (e: any) {
+      console.log('   • skip consolidación de racetracks ·', e.message?.split('\n')[0]);
+    }
+  }
+
   console.log('✅ Pre-push completo.');
 }
 

@@ -1,19 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../db';
-import { requireAuth, requireAdmin, getTenantAdminId } from '../middleware/auth';
+import { requireAuth, requireSuperadmin } from '../middleware/auth';
 
 const router = Router();
 
-router.get('/', requireAuth, async (req, res, next) => {
+// Los clubes hípicos son un catálogo global (adminId null): todos los ADMIN,
+// USER y el SUPERADMIN ven siempre la misma lista.
+router.get('/', requireAuth, async (_req, res, next) => {
   try {
-    const adminId = getTenantAdminId(req);
-    const where: any = {};
-    if (req.user!.role !== 'SUPERADMIN' || adminId != null) {
-      where.adminId = adminId;
-    }
     const list = await prisma.racetrack.findMany({
-      where,
+      where: { adminId: null },
       orderBy: { name: 'asc' },
     });
     res.json(list);
@@ -23,21 +20,20 @@ router.get('/', requireAuth, async (req, res, next) => {
 });
 
 const createSchema = z.object({
-  name: z.string().min(2).max(120),
-  city: z.string().min(2).max(120),
+  name: z.string().trim().min(2).max(120),
+  city: z.string().trim().min(2).max(120),
 });
 
-router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
+// Solo el SUPERADMIN modifica el catálogo, porque afecta a todos los tenants.
+router.post('/', requireAuth, requireSuperadmin, async (req, res, next) => {
   try {
     const data = createSchema.parse(req.body);
-    const adminId = getTenantAdminId(req);
-    if (adminId == null) {
-      return res
-        .status(400)
-        .json({ error: 'Falta el tenant. SUPERADMIN debe especificar ?adminId=' });
-    }
+    const existing = await prisma.racetrack.findFirst({
+      where: { name: data.name, adminId: null },
+    });
+    if (existing) return res.status(409).json({ error: 'El club hípico ya existe' });
     const created = await prisma.racetrack.create({
-      data: { name: data.name, city: data.city, adminId },
+      data: { name: data.name, city: data.city, adminId: null },
     });
     res.status(201).json(created);
   } catch (e) {
@@ -45,14 +41,16 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
   }
 });
 
-router.delete('/:id', requireAuth, requireAdmin, async (req, res, next) => {
+router.delete('/:id', requireAuth, requireSuperadmin, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const adminId = getTenantAdminId(req);
     const r = await prisma.racetrack.findUnique({ where: { id } });
-    if (!r) return res.status(404).json({ error: 'Hipódromo no existe' });
-    if (req.user!.role !== 'SUPERADMIN' && r.adminId !== adminId) {
-      return res.status(403).json({ error: 'No pertenece a tu tenant' });
+    if (!r) return res.status(404).json({ error: 'Club hípico no existe' });
+    const inUse = await prisma.reunion.count({ where: { racetrackId: id } });
+    if (inUse > 0) {
+      return res
+        .status(400)
+        .json({ error: 'No se puede eliminar: hay reuniones asociadas a este club' });
     }
     await prisma.racetrack.delete({ where: { id } });
     res.status(204).end();

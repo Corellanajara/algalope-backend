@@ -235,10 +235,10 @@ router.post('/', requireAuth, requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'Falta tenant (?adminId=)' });
     }
 
-    // Validar que el racetrack pertenezca al mismo tenant.
+    // El club debe ser del catálogo global (o, por compatibilidad, del tenant).
     const racetrack = await prisma.racetrack.findUnique({ where: { id: data.racetrackId } });
-    if (!racetrack || (racetrack as any).adminId !== adminId) {
-      return res.status(400).json({ error: 'El hipódromo no pertenece a tu tenant' });
+    if (!racetrack || (racetrack.adminId != null && racetrack.adminId !== adminId)) {
+      return res.status(400).json({ error: 'Club hípico inválido' });
     }
 
     const reunionDate = new Date(data.reunionDate);
